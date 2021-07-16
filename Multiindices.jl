@@ -2,6 +2,7 @@ module Multiindices
 
 export OrderedMultiindex
 export linear_index
+export index_signature
 
 abstract type Multiindex end
 
@@ -82,6 +83,16 @@ function ordered_multiindex( l::Int, n::Int, p::Int )
     end
   end
   return i
+end
+
+function index_signature( alpha::OrderedMultiindex )
+  sign = 1
+  for k in alpha.p:-1:1
+    if mod( k-alpha.index[k], 2 ) != 0
+      sign = sign*(-1)
+    end
+  end
+  return sign
 end
 
 end
