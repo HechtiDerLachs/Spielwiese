@@ -3,6 +3,8 @@ module Multiindices
 export OrderedMultiindex
 export linear_index
 export index_signature
+export HomogMultiindex
+export power
 
 abstract type Multiindex end
 
@@ -15,6 +17,7 @@ mutable struct OrderedMultiindex <: Multiindex
     for i in 1:p
       v[i] = i
     end
+    @show n, p, v
     return new( n, p, v )
   end
 end
@@ -93,6 +96,96 @@ function index_signature( alpha::OrderedMultiindex )
     end
   end
   return sign
+end
+
+mutable struct HomogMultiindex
+  n::Int		# The number of variables
+  d::Int		# The degree
+  a::Vector{Int}	# The multi-exponent
+  i::OrderedMultiindex	# The underlying multiindex
+
+
+  function HomogMultiindex( n::Int, d::Int, a::Vector{Int}, i::OrderedMultiindex )
+    if n <= 0 
+      error( "invalid number of variables" )
+    end
+    if d < 0
+      error( "invalid degree." )
+    end
+    if sum(a) != d 
+      error( "values of a don't match the requested degree." )
+    end 
+    return new( n, d, a, i )
+  end
+  
+  function HomogMultiindex( n::Int, d::Int )
+    if n<= 0
+      error( "invalid number of variables." )
+    end
+    if d<0 
+      error( "invalid degree." )
+    end
+    a = vcat( [ 0 for i in (2:n) ], [d] )
+    i = OrderedMultiindex( d+n-1, n-1 ) 
+    @show i
+    @show i.index
+    @show i.n
+    return HomogMultiindex( n, d, a, i )
+  end
+end
+
+function extract_exponent( alpha::HomogMultiindex )
+  @show alpha.i.index, alpha.i.p
+  if alpha.i.p > 0
+    a = [ alpha.i.index[1] - 1 ]
+    a = vcat( a, [ alpha.i.index[k+1] - alpha.i.index[k] - 1 for k in (1:alpha.i.p-1) ] )
+    a = vcat( a, [ alpha.i.n - alpha.i.index[alpha.i.p] ])
+  else
+    a = [ alpha.d ]
+  end
+  return a
+end
+
+function Base.show( io::Base.TTY, alpha::HomogMultiindex ) 
+  outstr = "( "
+  for k in (1:alpha.n-1) 
+    outstr = outstr * string(alpha.a[k]) * ", "
+  end
+  @show alpha.a
+  @show alpha.d
+  outstr = outstr * "$(alpha.a[alpha.n]) )\n"
+  Base.print( io, outstr )
+end
+  
+function Base.iterate( alpha::HomogMultiindex )
+  Base.iterate( alpha.i )
+  alpha.a = extract_exponent( alpha )
+  return alpha, alpha.a 
+end
+
+function Base.iterate( alpha::HomogMultiindex, state )
+  @show alpha.i
+  x = Base.iterate( alpha.i, state )
+  if x == nothing 
+    return nothing	# Iteration is exhausted
+  end
+  @show x
+  @show typeof( x )
+  alpha.i = x[1]
+  alpha.a = extract_exponent( alpha )
+  return alpha, alpha.a
+end
+
+function power( x::Vector, alpha::HomogMultiindex )
+  n = length( x )
+  if n != alpha.n
+    error( "number of variables not compatible." )
+  end
+  result = 1
+  for k in (1:n)
+    result = result * x[k]^(alpha.a[k])
+  end
+  return result
 end
 
 end
