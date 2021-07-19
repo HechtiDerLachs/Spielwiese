@@ -17,7 +17,7 @@ mutable struct OrderedMultiindex <: Multiindex
     for i in 1:p
       v[i] = i
     end
-    @show n, p, v
+    #@show n, p, v
     return new( n, p, v )
   end
 end
@@ -127,15 +127,15 @@ mutable struct HomogMultiindex
     end
     a = vcat( [ 0 for i in (2:n) ], [d] )
     i = OrderedMultiindex( d+n-1, n-1 ) 
-    @show i
-    @show i.index
-    @show i.n
+    #@show i
+    #@show i.index
+    #@show i.n
     return HomogMultiindex( n, d, a, i )
   end
 end
 
 function extract_exponent( alpha::HomogMultiindex )
-  @show alpha.i.index, alpha.i.p
+  #@show alpha.i.index, alpha.i.p
   if alpha.i.p > 0
     a = [ alpha.i.index[1] - 1 ]
     a = vcat( a, [ alpha.i.index[k+1] - alpha.i.index[k] - 1 for k in (1:alpha.i.p-1) ] )
@@ -151,8 +151,8 @@ function Base.show( io::Base.TTY, alpha::HomogMultiindex )
   for k in (1:alpha.n-1) 
     outstr = outstr * string(alpha.a[k]) * ", "
   end
-  @show alpha.a
-  @show alpha.d
+  #@show alpha.a
+  #@show alpha.d
   outstr = outstr * "$(alpha.a[alpha.n]) )\n"
   Base.print( io, outstr )
 end
@@ -164,13 +164,13 @@ function Base.iterate( alpha::HomogMultiindex )
 end
 
 function Base.iterate( alpha::HomogMultiindex, state )
-  @show alpha.i
+  #@show alpha.i
   x = Base.iterate( alpha.i, state )
   if x == nothing 
     return nothing	# Iteration is exhausted
   end
-  @show x
-  @show typeof( x )
+  #@show x
+  #@show typeof( x )
   alpha.i = x[1]
   alpha.a = extract_exponent( alpha )
   return alpha, alpha.a
@@ -186,6 +186,10 @@ function power( x::Vector, alpha::HomogMultiindex )
     result = result * x[k]^(alpha.a[k])
   end
   return result
+end
+
+function linear_index( alpha::HomogMultiindex ) 
+  return linear_index( alpha.i )
 end
 
 end

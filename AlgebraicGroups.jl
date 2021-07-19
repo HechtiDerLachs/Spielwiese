@@ -1,5 +1,3 @@
-include( "Multiindices.jl" )
-
 module Representations
 
 using Oscar
@@ -67,10 +65,30 @@ function mult( X::AlgGroupElem, Y::AlgGroupElem )
   return Z = AlgGroupElem( X.parent, X.A*Y.A )
 end
 
-function representation_on_sym_power( G::AlgGroupRep, k::Int )
-  # return the representation induced on the k-th symmetric power 
+function representation_on_sym_power( G::AlgGroupRep, d::Int )
+  # return the representation induced on the d-th symmetric power 
   # of the vector space V on which G is defined.
+  @show "call to representation on symmetric power" 
+  n = ncols( G.A )
+  N = binomial( n+d-1, d )
+  @show N
+  S, y = PolynomialRing( G.R, [ "y$k" for k in (1:n) ])
+  M = MatrixSpace( G.R, N, N )
+  B = zero(M)
+  A = matrix( S.(G.A) )
+  @show A
+  z = A*matrix(y)
+  @show z
+  for i in HomogMultiindex( n, d )
+    @show [z[k,1] for k in (1:n)]
+    f = power( [z[k,1] for k in (1:n)], i )
+    for j in HomogMultiindex( n, d )
+      B[ linear_index(j), linear_index(i) ] = coeff( f, power( y, j ))
+    end
+  end
+  return AlgGroupRep( G.R, G.I, B )
 end
+      
 
 function representation_on_ext_power( G::AlgGroupRep, p::Int )
   # return the representation on the p-th exterior power of the vector 
