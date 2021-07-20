@@ -9,6 +9,8 @@ import AbstractAlgebra.Generic.MatSpaceElem
 
 export AlgGroupRep, subgroup, representation_on_ext_power, null_cone
 
+export apply_diff_op
+
 
 #abstract type AlgebraicGroupElem end
 
@@ -121,5 +123,28 @@ function null_cone( H::AlgGroupRep )
   return R, J
 end
   
-
+# Interpret f as a differential operator by substitution of 
+# the variables by their respective partial derivatives and 
+# apply it to the polynomial g.
+function apply_diff_op( f::MPolyElem, g::MPolyElem )
+  result = 0
+  c = vec( collect( coefficients( f )))
+  m = vec( collect( monomials( f )))
+  e = vec( collect( exponent_vectors( f )))
+  N = length( c )
+  x = gens( parent( f ))
+  n = length( x )
+  for i in (1:N) 
+    tmp = g
+    for k in (1:n)
+      a = e[i][k]
+      for l in (1:a)
+        tmp = derivative( tmp, x[k])
+      end
+    end
+    result = result + c[i]*tmp
+  end
+  return result
+end
+    
 end
