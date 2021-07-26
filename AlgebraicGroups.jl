@@ -7,7 +7,8 @@ using Main.Misc
 import AbstractAlgebra.Field
 import AbstractAlgebra.Generic.MatSpaceElem
 
-export AlgGroupRep, subgroup, representation_on_ext_power, null_cone
+export AlgGroup, subgroup, representation_on_ext_power, null_cone
+export LinearRep
 
 export apply_diff_op
 
@@ -16,37 +17,39 @@ export apply_diff_op
 
 #abstract type Field = Union{ Nemo.FlintRationalField } end
 
-mutable struct AlgGroupRep
+mutable struct AlgGroup
   R::MPolyRing 		# The underlying polynomial ring
   I::MPolyIdeal		# The ideal describing the closed subgroup
-  A::MatSpaceElem	# The matrix for the representation
+  Z::MatSpaceElem	# The matrix of coordinates in GL_n(k). 
+  			# Note that the polynomial ring might have additional 
+			# variables.
 
   # default constructor for GL(n;QQ)
-  function AlgGroupRep( n::Int )
+  function AlgGroup( n::Int )
     #R_t,t = PolynomialRing(QQ,"t")
-    R, A,t = PolynomialRing(QQ, "a" => (1:n, 1:n), "t" => (1:1))
-    A = matrix(A)
+    R, Z,t = PolynomialRing(QQ, "a" => (1:n, 1:n), "t" => (1:1))
+    Z = matrix(Z)
     t = t[1]
-    I = ideal(R, [1-det(A)*t] )
-    return new( R, I, A )
+    I = ideal(R, [1-det(Z)*t] )
+    return new( R, I, Z )
   end
 
-  function AlgGroupRep( R::MPolyRing, I::MPolyIdeal, A::MatSpaceElem )
-    return new( R,I,A )
+  function AlgGroup( R::MPolyRing, I::MPolyIdeal, Z::MatSpaceElem )
+    return new( R,I,Z )
   end
 
 end
 
-function subgroup( G::AlgGroupRep, I::MPolyIdeal )
-  return AlgGroupRep( G.R, G.I + I, G.A )
+function subgroup( G::AlgGroup, I::MPolyIdeal )
+  return AlgGroup( G.R, G.I + I, G.Z )
 end
 
 mutable struct AlgGroupElem
-  parent::AlgGroupRep
+  parent::AlgGroup
   coord::Matrix{fmpq}
-  function AlgGroupElem( G::AlgGroupRep, A::Matrix{fmpq} ) 
+  function AlgGroupElem( G::AlgGroup, A::Matrix{fmpq} ) 
     # sanity check 
-    if !(nrows(A) == nrows( G.A ) && ncols(A) == ncols( G.A ))
+    if !(nrows(A) == nrows( G.Z ) && ncols(A) == ncols( G.Z ))
       println( "matrix sizes are incompatible" )
       return
     end
@@ -67,56 +70,77 @@ function mult( X::AlgGroupElem, Y::AlgGroupElem )
   return Z = AlgGroupElem( X.parent, X.A*Y.A )
 end
 
-function representation_on_sym_power( G::AlgGroupRep, d::Int )
+mutable struct LinearRep
+  G::AlgGroup
+  A::MatSpaceElem
+
+  function LinearRep( G::AlgGroup, A::MatSpaceElem )
+    # TODO: Add plausibility checks.
+    return new( G, A )
+  end
+
+  # The identity representation
+  function LinearRep( G )
+    return new( G, G.Z )
+  end
+end
+
+function representation_on_sym_power( rep::LinearRep, d::Int )
   # return the representation induced on the d-th symmetric power 
-  # of the vector space V on which G is defined.
-  @show "call to representation on symmetric power" 
-  n = ncols( G.A )
-  N = binomial( n+d-1, d )
-  @show N
-  S, y = PolynomialRing( G.R, [ "y$k" for k in (1:n) ])
-  M = MatrixSpace( G.R, N, N )
+  # of the vector space V on which the representation rep is 
+  # defined.
+  n = ncols( rep.A )	# the rank of the original representation
+  N = binomial( n+d-1, d )	# the rank of the induced representation
+  # A polynomial ring containing variables for the coordinates of 
+  # the original representation:
+  S, y = PolynomialRing( rep.G.R, [ "y$k" for k in (1:n) ])
+  # An empty matrix for the induced representation
+  M = MatrixSpace( rep.G.R, N, N )
   B = zero(M)
-  A = matrix( S.(G.A) )
-  @show A
+  # The matrix of the original representation, but promoted to the 
+  # new ring S
+  A = matrix( S.(rep.A) )
+  # images of the variables under the action of the group
   z = A*matrix(y)
-  @show z
+  # Populate the matrix B for the induced representation...
   for i in HomogMultiindex( n, d )
-    @show [z[k,1] for k in (1:n)]
+    # ...by going through the multiindices of the monomials 
+    # in the given degree and taking the respective powers...
     f = power( [z[k,1] for k in (1:n)], i )
     for j in HomogMultiindex( n, d )
+      # ...and extracting the coefficients again.
       B[ linear_index(j), linear_index(i) ] = coeff( f, power( y, j ))
     end
   end
-  return AlgGroupRep( G.R, G.I, B )
+  return LinearRep( rep.G, B )
 end
       
 
-function representation_on_ext_power( G::AlgGroupRep, p::Int )
+function representation_on_ext_power( G::AlgGroup, p::Int )
   # return the representation on the p-th exterior power of the vector 
   # space V on which G is defined. 
 
-  n = ncols( G.A )
+  n = ncols( G.Z )
   N = binomial( n, p )
   M = MatrixSpace( G.R, N, N )
   B = M(0)
   for i in OrderedMultiindex( n, p )
     for j in OrderedMultiindex( n, p )
-      B[ linear_index( i ), linear_index(j) ] = index_signature(i)*index_signature(j)*det( G.A[i.index,j.index] )
+      B[ linear_index( i ), linear_index(j) ] = index_signature(i)*index_signature(j)*det( G.Z[i.index,j.index] )
     end
   end
 
-  return AlgGroupRep( G.R, G.I, B )
+  return AlgGroup( G.R, G.I, B )
 end
 
-function null_cone( H::AlgGroupRep )
+function null_cone( rep::LinearRep )
   # Assemble the ring for the homomorphism needed for the computation
-  n = ncols( H.A )
-  M, phi, v = add_variables( H.R, vcat( [ "x$i" for i in (1:n) ], [ "y$i" for i in (1:n) ]))
-  A = matrix(phi.(H.A))
-  h = matrix(v[n+1:2*n]) - A*matrix(v[1:n])
-  I = ideal(M,vec(collect(h))) + ideal( M, [ phi(f) for f in gens(H.I) ] )
-  b = eliminate( I, gens(M)[1:length(gens(H.R))] )
+  n = ncols( rep.A )
+  M, phi, v = add_variables( rep.G.R, vcat( [ "x$i" for i in (1:n) ], [ "y$i" for i in (1:n) ]))
+  B = matrix(phi.(rep.A))
+  h = matrix(v[n+1:2*n]) - B*matrix(v[1:n])
+  I = ideal(M,vec(collect(h))) + ideal( M, [ phi(f) for f in gens(rep.G.I) ] )
+  b = eliminate( I, gens(M)[1:length(gens(rep.G.R))] )
   R, x = PolynomialRing( base_ring(M), [ "x$i" for i in (1:n) ] ) 
   psi = AlgebraHomomorphism( M, R, vcat( [ zero(R) for i in (1:length(gens(M))-n)], x ))
   J = [ psi(f) for f in gens(b) ]
@@ -147,4 +171,12 @@ function apply_diff_op( f::MPolyElem, g::MPolyElem )
   return result
 end
     
+# Apply the Omega process for the representation rep to 
+# the polynomial f. Here f is a polynomial in the coordinate 
+# functions of the vector space V on which the representation 
+# is defined. 
+function omega_process( rep::LinearRep, f::MPolyElem ) 
+
+end
+  
 end
